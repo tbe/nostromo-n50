@@ -9,7 +9,7 @@ nostromo_daemondir = $(datadir)/pixmaps
 CXXFLAGS = @DEBUG_FLAGS@ @NOSTROMO_CFLAGS@ @FLTK_CXXFLAGS@ -DIMG_PATH=\"$(nostromo_daemondir)\" `xml2-config --cflags`
 CFLAGS = @DEBUG_FLAGS@ @NOSTROMO_CFLAGS@ `xml2-config --cflags`
 LDFLAGS = @DEBUG_FLAGS@ 
-LIBS =  @NOSTROMO_LIBS@ @FLTK_LIBS@ -lXtst -lpthread @DEBUG_FLAGS@ @LIBS@ `xml2-config --libs`
+LIBS =  @NOSTROMO_LIBS@ @FLTK_LIBS@ -lXtst -lXi -lpthread @DEBUG_FLAGS@ @LIBS@ `xml2-config --libs`
 
 bin_PROGRAMS = nostromo_config nostromo_daemon nostromo_remote
 nostromo_config_SOURCES = nost_data.h \

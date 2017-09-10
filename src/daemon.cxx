@@ -43,11 +43,18 @@
 #include <gtk/gtk.h>
 
 #define XK_MISCELLANY
+#include <X11/extensions/XInput.h>
+#include <X11/extensions/XInput2.h>
+
 #include <X11/keysymdef.h>
 #include <X11/extensions/XTest.h>
 #include <X11/X.h>
+#include <X11/Xatom.h>
 
 #include "nost_data.h"
+
+#define XI_PROP_PRODUCT_ID "Device Product ID"
+#define XI_PROP_DEVICE_NODE "Device Node"
 
 #define BELKIN_VENDOR_ID 0x050d     /**< Belkin's vendor ID */
 #define NOSTROMO_N50_ID 0x0805      /**< n50 USB ID */
@@ -898,43 +905,71 @@ pthread_t spawn_reader(int dev, int id)
  **/
 int open_readers()
 {
-    int i;
+    int i,j;
     int fd;
     char s[64];
     struct input_devinfo info;
     int found = 0;
+    
+    XIDeviceInfo *devices;
+    int n_devices = 0;
 
-    for(i = 0; i < 16; i++) {
-        snprintf(s, sizeof(s), "/dev/input/event%d", i);
-        fd = open(s, O_RDWR);
-        if(fd >= 0) {
-            if(ioctl(fd, EVIOCGID, &info) == 0) {
-                if(info.vendor == BELKIN_VENDOR_ID &&
-                   (info.product == NOSTROMO_N52_ID || info.product == NOSTROMO_N50_ID)) {
-                    syslog(LOG_INFO, "Found %04x:%04x at dev %d", info.vendor, info.product, i);
-#if defined(EVIOCGRAB)
-                    /* Available in 2.6 or patched 2.4 */
-                    if(ioctl(fd, EVIOCGRAB, 1) < 0) {
-                        syslog(LOG_INFO, "Failed to grab: %s", strerror(errno));
-                        perror(__FUNCTION__);
-                        continue;
+    Atom product_id_atom = XInternAtom(display,XI_PROP_PRODUCT_ID,0);
+    Atom devicenode_atom = XInternAtom(display,XI_PROP_DEVICE_NODE,0);
+
+    devices = XIQueryDevice (display, XIAllDevices, &n_devices);
+    for (i = 0; i < n_devices; ++i) {
+        XIDeviceInfo *device = devices + i;
+        // make sure we don't open any unwanted device, that will crash
+        //if (devInfo[i].type == None) continue;
+
+        // open the device
+        Atom                act_type;
+        int                 act_format;
+        unsigned long       nitems, bytes_after;
+        unsigned char       *data;
+        Status              rc;
+        unsigned int        vendor_id = 0, product_id = 0;
+        
+        rc = XIGetProperty(display, device->deviceid, product_id_atom, 0, 2, False, XA_INTEGER, &act_type, &act_format, &nitems, &bytes_after, &data);
+        if ( rc == Success && nitems == 2 && act_format == 32 ) {
+            uint32_t *data32 = (uint32_t *)data;
+            vendor_id  = *data32;
+            product_id = *(data32 + 1);
+            // check if we hit our device
+            if ( vendor_id == BELKIN_VENDOR_ID && ( product_id == NOSTROMO_N52_ID || product_id == NOSTROMO_N50_ID ) ) {
+                XFree (data);
+                rc = XIGetProperty(display, device->deviceid, devicenode_atom, 0, 1000, False, XA_STRING, &act_type, &act_format, &nitems, &bytes_after, &data);
+                if ( rc == Success && act_format == 8 ) {
+                    // copy the string to a clean buffer
+                    char devpath[strlen((char*)data)];
+                    strcpy(devpath,(const char*)data);
+                    
+                    syslog(LOG_INFO, "Found %04x:%04x at \"%s\"", vendor_id, product_id, devpath);
+                    // open the device
+                    fd = open(devpath,O_RDWR);
+                    if ( fd >= 0 ) {
+                        // ignore failed devices, for know
+                        if(ioctl(fd, EVIOCGRAB, 1) < 0) {
+                            syslog(LOG_ERR, "Failed to grab %s: %s", devpath, strerror(errno));
+                            perror(__FUNCTION__);
+                        } else {
+                            found = spawn_reader(fd, product_id);
+                        }
+                    } else {
+                        syslog(LOG_ERR, "Failed to open %s: %s", devpath, strerror(errno));
                     }
-#else
-#warning No EVIOCGRAB interface, n52 support will be severely hampered.
-#warning In order to use an n52, you will have to manually unload any
-#warning USB keyboard/mouse driver modules - which will of course prevent
-#warning the use of USB keyboard/mouse and an n52 at the same time.
-#endif
-                    found = spawn_reader(fd, info.product);
-                } 
-            } else {
-                perror(s);
+                }
             }
-        } 
+        }
+        if ( rc == Success ) XFree (data);
     }
-
+    
+    // cleanup
+    XIFreeDeviceInfo (devices);
+    
     if(!found) {
-        syslog(LOG_INFO, "Nostromo device not found.", info.vendor, info.product, i);
+        syslog(LOG_INFO, "Nostromo device not found.");
     }
 
     return found;
@@ -1002,7 +1037,7 @@ int main(int argc, char *argv[], char* envp[])
     my_argv = argv;
     my_envp = envp;
 
-    daemon(0, 0);
+    //daemon(0, 0);
 
     openlog(argv[0], LOG_PID, LOG_USER);
 
