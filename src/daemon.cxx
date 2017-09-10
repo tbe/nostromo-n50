@@ -1037,7 +1037,7 @@ int main(int argc, char *argv[], char* envp[])
     my_argv = argv;
     my_envp = envp;
 
-    //daemon(0, 0);
+    daemon(0, 0);
 
     openlog(argv[0], LOG_PID, LOG_USER);
 
