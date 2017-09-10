@@ -48,7 +48,7 @@ int current_key = -1;
 int current_keystroke = -1;
 
 /// Default names of key mappings for new configs
-static char* default_key_names[] = {
+static const char* default_key_names[] = {
     "Button 01",
     "Button 02",
     "Button 03",

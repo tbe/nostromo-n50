@@ -1,7 +1,8 @@
 /*
     Nostromo_n50 configuration tools to support Belkin's Nostromo n50
     Copyright (C) 2003 Paul Bohme and others
-
+    Copyright (C) 2016 Thomas Berger
+    
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 2 of the License, or
@@ -832,7 +833,6 @@ struct input_devinfo {
 void* reader_thread(void* n)
 {
     struct input_event ev;
-    int k;
     nostromo_state* nost = (nostromo_state*)n;
     int led_states[][3] = {
         { 0, 0, 0 },
@@ -905,7 +905,7 @@ pthread_t spawn_reader(int dev, int id)
  **/
 int open_readers()
 {
-    int i,j;
+    int i;
     int fd;
     char s[64];
     struct input_devinfo info;
